@@ -30,6 +30,7 @@
 #include <inttypes.h>
 #include <zlib.h>
 #include <string.h>
+#include <string.h>
 #include <unistd.h>
 #include <limits.h>
 #include <assert.h>
@@ -1380,31 +1381,56 @@ int stk_mergepe(int argc, char *argv[])
 {
 	gzFile fp1, fp2;
 	kseq_t *seq[2];
+	kstring_t comment;
 
 	if (argc < 3) {
-		fprintf(stderr, "Usage: seqtk mergepe <in1.fq> <in2.fq>\n");
+		fprintf(stderr, "Usage: seqtk mergepe <in.a_1.fq> <in.a_2.fq> <comment_a> [<in.b_1.fa> <in.b_2.fq> <comment_b> ...]\n");
 		return 1;
 	}
-	fp1 = strcmp(argv[1], "-")? gzopen(argv[1], "r") : gzdopen(fileno(stdin), "r");
-	fp2 = strcmp(argv[2], "-")? gzopen(argv[2], "r") : gzdopen(fileno(stdin), "r");
-	if (fp1 == 0 || fp2 == 0) {
-		fprintf(stderr, "[E::%s] failed to open the input file/stream.\n", __func__);
+	if (argc % 3 != 1) {
+		fprintf(stderr, "seqtk: fastq files must be paired.\n");
 		return 1;
 	}
-	seq[0] = kseq_init(fp1);
-	seq[1] = kseq_init(fp2);
-	while (kseq_read(seq[0]) >= 0) {
-		if (kseq_read(seq[1]) < 0) {
-			fprintf(stderr, "[W::%s] the 2nd file has fewer records.\n", __func__);
+	int argi = 1;
+	while (argi <= argc - 3) {
+
+		fp1 = strcmp(argv[argi], "-")? gzopen(argv[argi], "r") : gzdopen(fileno(stdin), "r");
+		fp2 = strcmp(argv[argi+1], "-")? gzopen(argv[argi+1], "r") : gzdopen(fileno(stdin), "r");
+		if (fp1 == 0 || fp2 == 0) {
+			fprintf(stderr, "[E::%s] failed to open the input file/stream.\n", __func__);
+			return 1;
+		}
+
+		comment.s = argv[argi+2];
+		comment.l = strlen(comment.s);
+		comment.m = comment.l;
+
+		seq[0] = kseq_init(fp1);
+		seq[1] = kseq_init(fp2);
+		while (kseq_read(seq[0]) >= 0) {
+			if (kseq_read(seq[1]) < 0) {
+				fprintf(stderr, "[W::%s] the 2nd file has fewer records.\n", __func__);
+                break;
+			}
+			strncpy(seq[0]->comment.s, comment.s, comment.l);
+			strncpy(seq[1]->comment.s, comment.s, comment.l);
+			seq[0]->comment.l = comment.l;
+			seq[1]->comment.l = comment.l;
+
+			stk_printseq(seq[0], 0);
+			stk_printseq(seq[1], 0);
+		}
+		if (kseq_read(seq[1]) >= 0) {
+			fprintf(stderr, "[W::%s] the 1st file has fewer records.\n", __func__);
 			break;
 		}
-		stk_printseq(seq[0], 0);
-		stk_printseq(seq[1], 0);
+
+		seq[0]->comment.s = NULL;
+		seq[1]->comment.s = NULL;
+		kseq_destroy(seq[0]); gzclose(fp1);
+		kseq_destroy(seq[1]); gzclose(fp2);
+		argi += 2;
 	}
-	if (kseq_read(seq[1]) >= 0)
-		fprintf(stderr, "[W::%s] the 1st file has fewer records.\n", __func__);
-	kseq_destroy(seq[0]); gzclose(fp1);
-	kseq_destroy(seq[1]); gzclose(fp2);
 	return 0;
 }
 
@@ -1670,7 +1696,7 @@ static int usage()
 	fprintf(stderr, "         sample    subsample sequences\n");
 	fprintf(stderr, "         subseq    extract subsequences from FASTA/Q\n");
 	fprintf(stderr, "         fqchk     fastq QC (base/quality summary)\n");
-	fprintf(stderr, "         mergepe   interleave two PE FASTA/Q files\n");
+	fprintf(stderr, "         mergepe   interleave pairs of PE FASTA/Q files\n");
 	fprintf(stderr, "         trimfq    trim FASTQ using the Phred algorithm\n\n");
 	fprintf(stderr, "         hety      regional heterozygosity\n");
 	fprintf(stderr, "         gc        identify high- or low-GC regions\n");
