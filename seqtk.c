@@ -1381,7 +1381,8 @@ int stk_mergepe(int argc, char *argv[])
 {
 	gzFile fp1, fp2;
 	kseq_t *seq[2];
-	kstring_t comment;
+	char *comment_s;
+	int comment_l;
 
 	if (argc < 3) {
 		fprintf(stderr, "Usage: seqtk mergepe <in.a_1.fq> <in.a_2.fq> <comment_a> [<in.b_1.fa> <in.b_2.fq> <comment_b> ...]\n");
@@ -1393,6 +1394,7 @@ int stk_mergepe(int argc, char *argv[])
 	}
 	int argi = 1;
 	while (argi <= argc - 3) {
+		fprintf(stderr, "%s, %s, %s\n", argv[argi], argv[argi+1], argv[argi+2]);
 
 		fp1 = strcmp(argv[argi], "-")? gzopen(argv[argi], "r") : gzdopen(fileno(stdin), "r");
 		fp2 = strcmp(argv[argi+1], "-")? gzopen(argv[argi+1], "r") : gzdopen(fileno(stdin), "r");
@@ -1401,21 +1403,29 @@ int stk_mergepe(int argc, char *argv[])
 			return 1;
 		}
 
-		comment.s = argv[argi+2];
-		comment.l = strlen(comment.s);
-		comment.m = comment.l;
+		comment_s = argv[argi+2];
+		comment_l = strlen(comment_s);
 
 		seq[0] = kseq_init(fp1);
 		seq[1] = kseq_init(fp2);
+
+		seq[0]->comment.s = (char *)malloc(10000);
+		seq[0]->comment.l = 0;
+		seq[0]->comment.m = 10000;
+
+		seq[1]->comment.s = (char *)malloc(10000);
+		seq[1]->comment.l = 0;
+		seq[1]->comment.m = 10000;
+
 		while (kseq_read(seq[0]) >= 0) {
 			if (kseq_read(seq[1]) < 0) {
 				fprintf(stderr, "[W::%s] the 2nd file has fewer records.\n", __func__);
-                break;
+				break;
 			}
-			strncpy(seq[0]->comment.s, comment.s, comment.l);
-			strncpy(seq[1]->comment.s, comment.s, comment.l);
-			seq[0]->comment.l = comment.l;
-			seq[1]->comment.l = comment.l;
+		strncpy(seq[0]->comment.s, comment_s, comment_l);
+		strncpy(seq[1]->comment.s, comment_s, comment_l);
+		seq[0]->comment.l = comment_l;
+		seq[1]->comment.l = comment_l;
 
 			stk_printseq(seq[0], 0);
 			stk_printseq(seq[1], 0);
@@ -1429,7 +1439,7 @@ int stk_mergepe(int argc, char *argv[])
 		seq[1]->comment.s = NULL;
 		kseq_destroy(seq[0]); gzclose(fp1);
 		kseq_destroy(seq[1]); gzclose(fp2);
-		argi += 2;
+		argi += 3;
 	}
 	return 0;
 }
