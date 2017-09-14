@@ -44,6 +44,21 @@ typedef struct {
 	uint64_t *a;
 } reglist_t;
 
+
+static inline int ks_resize(kstring_t *s, size_t size)
+{
+	if (s->m < size) {
+		char *tmp;
+		s->m = size;
+		kroundup32(s->m);
+		if ((tmp = (char*)realloc(s->s, s->m)))
+			s->s = tmp;
+		else
+			return -1;
+	}
+	return 0;
+}
+
 #include "khash.h"
 KHASH_MAP_INIT_STR(reg, reglist_t)
 KHASH_SET_INIT_INT64(64)
@@ -1409,23 +1424,21 @@ int stk_mergepe(int argc, char *argv[])
 		seq[0] = kseq_init(fp1);
 		seq[1] = kseq_init(fp2);
 
-		seq[0]->comment.s = (char *)malloc(10000);
+		ks_resize(&seq[0]->comment, 10000);
+		ks_resize(&seq[1]->comment, 10000);
 		seq[0]->comment.l = 0;
-		seq[0]->comment.m = 10000;
-
-		seq[1]->comment.s = (char *)malloc(10000);
 		seq[1]->comment.l = 0;
-		seq[1]->comment.m = 10000;
+
 
 		while (kseq_read(seq[0]) >= 0) {
 			if (kseq_read(seq[1]) < 0) {
 				fprintf(stderr, "[W::%s] the 2nd file has fewer records.\n", __func__);
 				break;
 			}
-		strncpy(seq[0]->comment.s, comment_s, comment_l);
-		strncpy(seq[1]->comment.s, comment_s, comment_l);
-		seq[0]->comment.l = comment_l;
-		seq[1]->comment.l = comment_l;
+			strncpy(seq[0]->comment.s, comment_s, comment_l + 1);
+			strncpy(seq[1]->comment.s, comment_s, comment_l + 1);
+			seq[0]->comment.l = comment_l + 1;
+			seq[1]->comment.l = comment_l + 1;
 
 			stk_printseq(seq[0], 0);
 			stk_printseq(seq[1], 0);
